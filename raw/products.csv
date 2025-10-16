@@ -1,0 +1,6 @@
+product_id,sku,model,category,weight_grams,dimensions_mm,vendor_code,launch_date,msrp_usd
+1001,AB-001,Alpha-X,Router, 950,"220x120x45",V-77,2023-11-15,129.90
+1002,AB-002,Alpha-X Pro,Router, , "220x120x45", V-77, 2023/13/01, 159,90
+1003,ZX-900,"",Switch, 1800,"440x300x44",V-12,2022-05-07,499.00
+1004,ZZ-001,OmegaCam,Camera,650,"90x60x",V-77,2021-02-29,249.00
+,AB-003,Alpha-Mini,Router,420,"120x80x30",V-77,2024-03-12,99.00
