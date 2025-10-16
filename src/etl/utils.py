@@ -1,6 +1,6 @@
 import pandas as pd
-import pandera as pa
-from pandera import Column, DataFrameSchema, Check
+import pandera.pandas as pa  # Corrigir import
+from pandera.pandas import Column, DataFrameSchema, Check  # Corrigir import
 import hashlib
 import re
 import json
