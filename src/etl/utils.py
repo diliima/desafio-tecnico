@@ -9,6 +9,51 @@ from typing import Tuple, Dict, Any
 from pathlib import Path
 from .validators import is_valid_email, validate_product_row
 
+
+# Funções auxiliares exportadas para testes
+def parse_dimensions(dimensions_str: str) -> tuple:
+    """
+    Parse dimensions_mm para tupla (length, width, height).
+    Retorna (None, None, None) se formato inválido.
+    
+    Args:
+        dimensions_str: String no formato "LxWxH" (ex: "100x50x30")
+    
+    Returns:
+        Tupla (length, width, height) ou (None, None, None) se inválido
+    """
+    if not dimensions_str or pd.isna(dimensions_str):
+        return (None, None, None)
+    
+    # Remove espaços e aspas
+    clean_str = str(dimensions_str).strip('"').strip()
+    
+    # Regex para capturar dimensões no formato "220x120x45"
+    pattern = r'^(\d+)x(\d+)x(\d+)$'
+    match = re.match(pattern, clean_str)
+    
+    if match:
+        return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    
+    return (None, None, None)
+
+
+def normalize_price(price_str: str) -> str:
+    """
+    Normaliza preço substituindo vírgula por ponto.
+    
+    Args:
+        price_str: String de preço (ex: "99,99" ou "99.99")
+    
+    Returns:
+        String normalizada com ponto decimal (ex: "99.99")
+    """
+    if not price_str or pd.isna(price_str):
+        return price_str
+    
+    return str(price_str).replace(',', '.')
+
+
 # Schemas Pandera para validação declarativa
 PRODUCT_SCHEMA = DataFrameSchema({
     "product_id": Column(int, Check.greater_than(0), nullable=False),

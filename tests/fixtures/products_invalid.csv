@@ -1,0 +1,6 @@
+product_id,sku,model,category,weight_grams,dimensions_mm,vendor_code,launch_date,msrp_usd
+999,SKU-999,Invalid Date,Electronics,500.0,100x50x30,V001,2024-13-45,99.99
+998,SKU-998,Incomplete Dim,Electronics,500.0,90x60x,V001,2024-01-15,99.99
+997,SKU-997,Negative Price,Electronics,500.0,100x50x30,V001,2024-01-15,-50.00
+996,SKU-996,Invalid Price,Electronics,500.0,100x50x30,V001,2024-01-15,ABC
+995,,Missing SKU,Electronics,500.0,100x50x30,V001,2024-01-15,99.99

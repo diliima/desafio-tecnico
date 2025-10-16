@@ -22,8 +22,8 @@ class DocumentIngestor:
     def __init__(
         self,
         embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        chunk_size: int = 600,
-        chunk_overlap: int = 100,
+        chunk_size: int = 2400,
+        chunk_overlap: int = 400,
         index_path: str = "data/faiss_index"
     ):
         """
