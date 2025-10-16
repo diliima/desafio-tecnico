@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 from pathlib import Path
-from .utils import DataNormalizer, load_jsonl, create_output_dirs, generate_report, save_data_contracts
+from .utils import DataNormalizer, load_jsonl, create_output_dirs, generate_report, save_data_contracts, save_partitioned_data
 
 class DataPipeline:
     """Pipeline principal de ETL"""
@@ -165,32 +165,37 @@ class DataPipeline:
     
     def _save_clean_data(self, products_df: pd.DataFrame, vendors_df: pd.DataFrame, 
                         inventory_df: pd.DataFrame):
-        """Salva dados limpos em formato parquet"""
+        """Salva dados limpos em formato parquet particionado"""
         
-        # Salvar dim_product
+        # Salvar dim_product (particionado por categoria)
         if not products_df.empty:
-            products_df.to_parquet(
-                self.output_path / "dim_product" / "dim_product.parquet",
-                index=False
+            save_partitioned_data(
+                products_df, 
+                self.output_path, 
+                "dim_product", 
+                partition_cols=['category']
             )
-            print(f"✅ Salvos {len(products_df)} produtos limpos")
+            print(f"✅ Salvos {len(products_df)} produtos limpos (particionado por categoria)")
         
-        # Salvar dim_vendor  
+        # Salvar dim_vendor (arquivo único - poucos registros)
         if not vendors_df.empty:
-            vendors_df.to_parquet(
-                self.output_path / "dim_vendor" / "dim_vendor.parquet", 
-                index=False
+            save_partitioned_data(
+                vendors_df,
+                self.output_path,
+                "dim_vendor"
             )
             print(f"✅ Salvos {len(vendors_df)} vendors limpos")
         
-        # Salvar fact_inventory
+        # Salvar fact_inventory (particionado por warehouse)
         if not inventory_df.empty:
-            inventory_df.to_parquet(
-                self.output_path / "fact_inventory" / "fact_inventory.parquet",
-                index=False
+            save_partitioned_data(
+                inventory_df,
+                self.output_path,
+                "fact_inventory",
+                partition_cols=['warehouse']
             )
-            print(f"✅ Salvos {len(inventory_df)} registros de inventory")
-    
+            print(f"✅ Salvos {len(inventory_df)} registros de inventory (particionado por warehouse)")
+
     def _save_quarantine_data(self, quarantine_products: pd.DataFrame, 
                              quarantine_vendors: pd.DataFrame):
         """Salva dados em quarentena"""

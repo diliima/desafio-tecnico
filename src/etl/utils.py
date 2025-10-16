@@ -266,46 +266,201 @@ def create_output_dirs(output_path: Path):
         dir_path.mkdir(parents=True, exist_ok=True)
 
 def save_data_contracts(output_path: Path):
-    """Salva contratos de dados (schemas + regras)"""
+    """Salva contratos de dados versionados e detalhados"""
+    
     contracts = {
         "version": "1.0.0",
+        "created_at": datetime.now().isoformat(),
+        "data_quality_policies": {
+            "date_normalization": {
+                "invalid_months": "Mês > 12 é corrigido para 12",
+                "invalid_days": "Dia > 28 (fevereiro) é corrigido para 28",
+                "null_dates": "Datas nulas são mantidas como null"
+            },
+            "vendor_deduplication": {
+                "strategy": "Preferir nome mais completo (maior length)",
+                "email_consolidation": "Usar email do registro principal"
+            },
+            "product_id_generation": {
+                "method": "MD5 hash dos primeiros 8 caracteres do SKU",
+                "deterministic": "Sempre gera o mesmo ID para o mesmo SKU"
+            }
+        },
         "schemas": {
             "dim_product": {
-                "description": "Tabela dimensional de produtos",
+                "description": "Tabela dimensional de produtos normalizada",
+                "partitioning": ["category"],
+                "primary_key": ["product_id"],
+                "foreign_keys": {
+                    "vendor_code": "dim_vendor.vendor_code"
+                },
                 "columns": {
-                    "product_id": {"type": "int", "nullable": False, "primary_key": True},
-                    "sku": {"type": "string", "nullable": False, "pattern": "^[A-Z]{2}-\\d{3}$"},
-                    "model": {"type": "string", "nullable": True},
-                    "category": {"type": "string", "nullable": False, "enum": ["Router", "Switch", "Camera"]},
-                    "weight_g": {"type": "int", "nullable": True, "min_value": 1},
-                    "length_mm": {"type": "int", "nullable": True, "min_value": 1},
-                    "width_mm": {"type": "int", "nullable": True, "min_value": 1},
-                    "height_mm": {"type": "int", "nullable": True, "min_value": 1},
-                    "vendor_code": {"type": "string", "nullable": False, "pattern": "^V-\\d{2}$"},
-                    "launch_date": {"type": "string", "nullable": True, "format": "date"},
-                    "msrp_usd": {"type": "float", "nullable": True, "min_value": 0}
+                    "product_id": {
+                        "type": "int64", 
+                        "nullable": False, 
+                        "constraints": ["unique", "> 0"],
+                        "description": "ID único do produto (gerado determinísticamente se ausente)"
+                    },
+                    "sku": {
+                        "type": "string", 
+                        "nullable": False, 
+                        "pattern": "^[A-Z]{2}-\\d{3}$",
+                        "description": "Código SKU no formato XX-000"
+                    },
+                    "model": {
+                        "type": "string", 
+                        "nullable": True,
+                        "description": "Nome do modelo do produto"
+                    },
+                    "category": {
+                        "type": "string", 
+                        "nullable": False, 
+                        "enum": ["Router", "Switch", "Camera"],
+                        "description": "Categoria do produto"
+                    },
+                    "weight_g": {
+                        "type": "int64", 
+                        "nullable": True, 
+                        "constraints": ["> 0"],
+                        "description": "Peso em gramas (convertido de weight_grams)"
+                    },
+                    "length_mm": {
+                        "type": "int64", 
+                        "nullable": True, 
+                        "constraints": ["> 0"],
+                        "description": "Comprimento em mm (extraído de dimensions_mm)"
+                    },
+                    "width_mm": {
+                        "type": "int64", 
+                        "nullable": True, 
+                        "constraints": ["> 0"],
+                        "description": "Largura em mm (extraído de dimensions_mm)"
+                    },
+                    "height_mm": {
+                        "type": "int64", 
+                        "nullable": True, 
+                        "constraints": ["> 0"],
+                        "description": "Altura em mm (extraído de dimensions_mm)"
+                    },
+                    "vendor_code": {
+                        "type": "string", 
+                        "nullable": False, 
+                        "pattern": "^V-\\d{2}$",
+                        "description": "Código do fornecedor no formato V-XX"
+                    },
+                    "launch_date": {
+                        "type": "string", 
+                        "nullable": True, 
+                        "format": "YYYY-MM-DD",
+                        "description": "Data de lançamento normalizada"
+                    },
+                    "msrp_usd": {
+                        "type": "float64", 
+                        "nullable": True, 
+                        "constraints": [">= 0"],
+                        "description": "Preço sugerido em USD (decimais normalizados)"
+                    }
                 }
             },
             "dim_vendor": {
-                "description": "Tabela dimensional de fornecedores",
+                "description": "Tabela dimensional de fornecedores (deduplicated)",
+                "primary_key": ["vendor_code"],
                 "columns": {
-                    "vendor_code": {"type": "string", "nullable": False, "primary_key": True},
-                    "vendor_name": {"type": "string", "nullable": False, "min_length": 2},
-                    "country": {"type": "string", "nullable": False, "length": 2},
-                    "support_email": {"type": "string", "nullable": False, "format": "email"}
+                    "vendor_code": {
+                        "type": "string", 
+                        "nullable": False, 
+                        "constraints": ["unique"],
+                        "pattern": "^V-\\d{2}$",
+                        "description": "Código único do fornecedor"
+                    },
+                    "vendor_name": {
+                        "type": "string", 
+                        "nullable": False, 
+                        "constraints": ["min_length: 2"],
+                        "description": "Nome consolidado do fornecedor"
+                    },
+                    "country": {
+                        "type": "string", 
+                        "nullable": False, 
+                        "constraints": ["length: 2"],
+                        "description": "Código do país (ISO 2 chars)"
+                    },
+                    "support_email": {
+                        "type": "string", 
+                        "nullable": False, 
+                        "format": "email",
+                        "description": "Email de suporte validado"
+                    }
+                }
+            },
+            "fact_inventory": {
+                "description": "Tabela fato de estoque",
+                "partitioning": ["warehouse"],
+                "foreign_keys": {
+                    "product_id": "dim_product.product_id"
+                },
+                "columns": {
+                    "product_id": {
+                        "type": "int64", 
+                        "nullable": False,
+                        "description": "Referência ao produto"
+                    },
+                    "warehouse": {
+                        "type": "string", 
+                        "nullable": False,
+                        "description": "Código do armazém"
+                    },
+                    "on_hand": {
+                        "type": "int64", 
+                        "nullable": False, 
+                        "constraints": [">= 0"],
+                        "description": "Quantidade em estoque"
+                    },
+                    "min_stock": {
+                        "type": "int64", 
+                        "nullable": False, 
+                        "constraints": [">= 0"],
+                        "description": "Estoque mínimo"
+                    },
+                    "last_counted_at": {
+                        "type": "date", 
+                        "nullable": False,
+                        "description": "Data da última contagem"
+                    }
                 }
             }
         },
         "data_quality_rules": {
-            "product_completeness": "SKU, category, vendor_code são obrigatórios",
-            "vendor_uniqueness": "vendor_code deve ser único",
-            "referential_integrity": "vendor_code em products deve existir em vendors",
-            "date_policy": "Datas inválidas são corrigidas: mês > 12 → 12, dia > 28 (fev) → 28"
+            "completeness": {
+                "dim_product": ["product_id", "sku", "category", "vendor_code"],
+                "dim_vendor": ["vendor_code", "vendor_name", "country", "support_email"],
+                "fact_inventory": ["product_id", "warehouse", "on_hand", "min_stock", "last_counted_at"]
+            },
+            "uniqueness": {
+                "dim_product": ["product_id", "sku"],
+                "dim_vendor": ["vendor_code"]
+            },
+            "referential_integrity": [
+                "dim_product.vendor_code -> dim_vendor.vendor_code",
+                "fact_inventory.product_id -> dim_product.product_id"
+            ]
         }
     }
     
+    # Salvar contrato principal
     with open(output_path / "schemas" / "data_contracts.json", 'w') as f:
         json.dump(contracts, f, indent=2)
+    
+    # Salvar schemas individuais para cada tabela
+    for table_name, schema in contracts["schemas"].items():
+        with open(output_path / "schemas" / f"{table_name}_schema.json", 'w') as f:
+            json.dump({
+                "table": table_name,
+                "version": contracts["version"],
+                "schema": schema
+            }, f, indent=2)
+    
+    print(f"📜 Contratos de dados salvos em: {output_path}/schemas/")
 
 def generate_report(clean_products, clean_vendors, inventory,
                    quarantine_products, quarantine_vendors, output_path: Path):
@@ -333,3 +488,23 @@ def generate_report(clean_products, clean_vendors, inventory,
     
     print(f"📋 Relatório: {report['pipeline_summary']}")
     return report
+
+def save_partitioned_data(df: pd.DataFrame, output_path: Path, table_name: str, partition_cols: list = None):
+    """Salva dados particionados"""
+    table_path = output_path / table_name
+    
+    if partition_cols and not df.empty:
+        # Particionamento por colunas especificadas
+        df.to_parquet(
+            table_path,
+            partition_cols=partition_cols,
+            index=False,
+            engine='pyarrow'
+        )
+    else:
+        # Salvar como arquivo único se não há partições
+        table_path.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(
+            table_path / f"{table_name}.parquet",
+            index=False
+        )
