@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from .retriever import DocumentRetriever
 
 # Imports locais
 try:
@@ -19,6 +20,21 @@ try:
 except ImportError:
     from retriever import DocumentRetriever
     from ingest import DocumentIngestor
+
+# Carregar variáveis de ambiente do .env
+def load_env():
+    """Carrega variáveis de ambiente do arquivo .env"""
+    env_path = Path(".env")
+    if env_path.exists():
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+
+# Carregar .env no início
+load_env()
 
 # Configurar logging
 logging.basicConfig(
@@ -37,11 +53,21 @@ async def lifespan(app: FastAPI):
     # Startup
     global retriever
     
-    llm_provider = os.getenv("LLM_PROVIDER", "mock")
+    # Usar OpenAI por padrão se a chave estiver configurada
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
+        llm_provider = "openai"
+        logger.info("🤖 Chave OpenAI detectada, usando provider OpenAI")
+    else:
+        llm_provider = os.getenv("LLM_PROVIDER", "mock")
+        logger.info(f"🤖 Usando provider: {llm_provider}")
     
     try:
         logger.info(f"Inicializando retriever com provider: {llm_provider}...")
-        retriever = DocumentRetriever(llm_provider=llm_provider)
+        retriever = DocumentRetriever(
+            llm_provider=llm_provider,
+            model_name=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        )
         logger.info("✅ Retriever inicializado com sucesso")
     except FileNotFoundError as e:
         logger.warning(f"⚠️  Índice não encontrado: {e}")
@@ -144,7 +170,25 @@ async def health_check():
     if retriever:
         llm_provider = retriever.llm_provider
         
-        if llm_provider == "ollama":
+        if llm_provider == "openai":
+            # Verificar se a chave está configurada
+            llm_available = retriever.openai_api_key is not None
+            if llm_available:
+                try:
+                    # Fazer teste rápido da API
+                    from openai import OpenAI
+                    client = OpenAI(api_key=retriever.openai_api_key)
+                    # Teste com um prompt mínimo
+                    response = client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[{"role": "user", "content": "test"}],
+                        max_tokens=1
+                    )
+                    llm_available = True
+                except Exception as e:
+                    logger.warning(f"OpenAI API não disponível: {e}")
+                    llm_available = False
+        elif llm_provider == "ollama":
             try:
                 import requests
                 response = requests.get(f"{retriever.ollama_url}/api/tags", timeout=5)
@@ -153,16 +197,15 @@ async def health_check():
                 pass
         elif llm_provider == "mock":
             llm_available = True
-        elif llm_provider == "openai":
-            llm_available = retriever.openai_api_key is not None
     
-    status = "healthy" if index_loaded else "degraded"
+    status = "healthy" if (index_loaded and llm_available) else "degraded"
     
     return {
         "status": status,
         "index_loaded": index_loaded,
         "llm_available": llm_available,
-        "llm_provider": llm_provider
+        "llm_provider": llm_provider,
+        "model": retriever.model_name if retriever else "none"
     }
 
 

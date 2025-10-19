@@ -400,10 +400,50 @@ RESPOSTA (cite as páginas):"""
             raise
     
     def _call_openai(self, prompt: str) -> str:
-        """Chama a API da OpenAI."""
+        """Chama a API da OpenAI usando a biblioteca oficial."""
         if not self.openai_api_key:
             raise ValueError("OPENAI_API_KEY não configurada")
         
+        try:
+            # Usar a biblioteca oficial da OpenAI
+            from openai import OpenAI
+            
+            client = OpenAI(api_key=self.openai_api_key)
+            
+            response = client.chat.completions.create(
+                model=self.model_name or "gpt-3.5-turbo",
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": """Você é um assistente técnico especializado em documentação de produtos.
+                        
+INSTRUÇÕES IMPORTANTES:
+1. Use APENAS as informações dos documentos fornecidos
+2. Cite sempre a página de onde veio a informação (ex: "Conforme página 2...")
+3. Se a informação não estiver nos documentos, responda: "Informação não encontrada na documentação fornecida"
+4. Seja preciso e técnico
+5. Responda em português brasileiro
+6. Mantenha um tom profissional e objetivo"""
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=1000,
+                top_p=0.9
+            )
+            
+            return response.choices[0].message.content
+            
+        except ImportError:
+            # Fallback para requests se a biblioteca não estiver instalada
+            logger.warning("Biblioteca openai não encontrada, usando requests")
+            return self._call_openai_requests(prompt)
+        except Exception as e:
+            logger.error(f"Erro ao chamar OpenAI: {e}")
+            raise
+
+    def _call_openai_requests(self, prompt: str) -> str:
+        """Fallback usando requests diretamente."""
         try:
             response = requests.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -414,10 +454,15 @@ RESPOSTA (cite as páginas):"""
                 json={
                     "model": self.model_name or "gpt-3.5-turbo",
                     "messages": [
-                        {"role": "system", "content": "Você é um assistente técnico especializado."},
+                        {
+                            "role": "system", 
+                            "content": "Você é um assistente técnico especializado. Use apenas as informações fornecidas e cite sempre as páginas."
+                        },
                         {"role": "user", "content": prompt}
                     ],
                     "temperature": 0.1,
+                    "max_tokens": 1000,
+                    "top_p": 0.9
                 },
                 timeout=60
             )
@@ -426,7 +471,7 @@ RESPOSTA (cite as páginas):"""
             return response.json()['choices'][0]['message']['content']
             
         except Exception as e:
-            logger.error(f"Erro ao chamar OpenAI: {e}")
+            logger.error(f"Erro ao chamar OpenAI via requests: {e}")
             raise
     
     def _call_mock(self, prompt: str, contexts: List[Dict[str, Any]]) -> str:
