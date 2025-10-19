@@ -42,3 +42,6 @@ pre-commit>=3.8.0
 # Type Stubs
 types-requests>=2.31.0
 pandas-stubs>=2.1.0
+
+# OpenAI (NOVO)
+openai>=1.0.0
